@@ -10,11 +10,11 @@ commit_hash=$(rustc --version | cut -d"(" -f2 | cut -d" " -f1)
 git checkout $commit_hash
 cd ..
 
-git clone https://github.com/phil-opp/nightly-liballoc.git
+git clone https://github.com/phil-opp/nightly-libcollections.git
 
-cd nightly-liballoc
+cd nightly-libcollections
 rm -r src
-cp -r ../rust/src/liballoc src
+cp -r ../rust/src/libcollections src
 
 # try to build it
 cargo build
@@ -27,7 +27,7 @@ git add --all src
 git commit -m "Update to $commit_hash" || true
 
 if [ $TRAVIS_BRANCH = 'master' ]; then
-  eval SSH_KEY_TRAVIS_ID=3ba20755fc36
+  eval SSH_KEY_TRAVIS_ID=5b96fd6529de
   eval key=\$encrypted_${SSH_KEY_TRAVIS_ID}_key
   eval iv=\$encrypted_${SSH_KEY_TRAVIS_ID}_iv
 
@@ -35,10 +35,10 @@ if [ $TRAVIS_BRANCH = 'master' ]; then
   openssl aes-256-cbc -K $key -iv $iv -in scripts/publish-key.enc -out ~/.ssh/id_rsa -d
   chmod 600 ~/.ssh/id_rsa
 
-  git remote add upstream git@github.com:phil-opp/nightly-liballoc.git
+  git remote add upstream git@github.com:phil-opp/nightly-libcollections.git
   git push upstream
 fi
 
 cd ../
 rm -rf rust
-rm -rf nightly-liballoc
+rm -rf nightly-libcollections
