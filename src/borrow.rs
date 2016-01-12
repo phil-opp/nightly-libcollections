@@ -12,98 +12,254 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use marker::Sized;
+use core::clone::Clone;
+use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use core::convert::AsRef;
+use core::hash::{Hash, Hasher};
+use core::marker::Sized;
+use core::ops::Deref;
+use core::option::Option;
 
-/// A trait for borrowing data.
-///
-/// In general, there may be several ways to "borrow" a piece of data.  The
-/// typical ways of borrowing a type `T` are `&T` (a shared borrow) and `&mut T`
-/// (a mutable borrow). But types like `Vec<T>` provide additional kinds of
-/// borrows: the borrowed slices `&[T]` and `&mut [T]`.
-///
-/// When writing generic code, it is often desirable to abstract over all ways
-/// of borrowing data from a given type. That is the role of the `Borrow`
-/// trait: if `T: Borrow<U>`, then `&U` can be borrowed from `&T`.  A given
-/// type can be borrowed as multiple different types. In particular, `Vec<T>:
-/// Borrow<Vec<T>>` and `Vec<T>: Borrow<[T]>`.
-///
-/// If you are implementing `Borrow` and both `Self` and `Borrowed` implement
-/// `Hash`, `Eq`, and/or `Ord`, they must produce the same result.
-///
-/// `Borrow` is very similar to, but different than, `AsRef`. See
-/// [the book][book] for more.
-///
-/// [book]: ../../book/borrow-and-asref.html
+use fmt;
+
+use self::Cow::*;
+
 #[stable(feature = "rust1", since = "1.0.0")]
-pub trait Borrow<Borrowed: ?Sized> {
-    /// Immutably borrows from an owned value.
+pub use core::borrow::{Borrow, BorrowMut};
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> Borrow<B> for Cow<'a, B>
+    where B: ToOwned,
+          <B as ToOwned>::Owned: 'a
+{
+    fn borrow(&self) -> &B {
+        &**self
+    }
+}
+
+/// A generalization of `Clone` to borrowed data.
+///
+/// Some types make it possible to go from borrowed to owned, usually by
+/// implementing the `Clone` trait. But `Clone` works only for going from `&T`
+/// to `T`. The `ToOwned` trait generalizes `Clone` to construct owned data
+/// from any borrow of a given type.
+#[stable(feature = "rust1", since = "1.0.0")]
+pub trait ToOwned {
+    #[stable(feature = "rust1", since = "1.0.0")]
+    type Owned: Borrow<Self>;
+
+    /// Creates owned data from borrowed data, usually by cloning.
+    #[stable(feature = "rust1", since = "1.0.0")]
+    fn to_owned(&self) -> Self::Owned;
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<T> ToOwned for T where T: Clone {
+    type Owned = T;
+    fn to_owned(&self) -> T {
+        self.clone()
+    }
+}
+
+/// A clone-on-write smart pointer.
+///
+/// The type `Cow` is a smart pointer providing clone-on-write functionality: it
+/// can enclose and provide immutable access to borrowed data, and clone the
+/// data lazily when mutation or ownership is required. The type is designed to
+/// work with general borrowed data via the `Borrow` trait.
+///
+/// `Cow` implements `Deref`, which means that you can call
+/// non-mutating methods directly on the data it encloses. If mutation
+/// is desired, `to_mut` will obtain a mutable reference to an owned
+/// value, cloning if necessary.
+///
+/// # Examples
+///
+/// ```
+/// use std::borrow::Cow;
+///
+/// # #[allow(dead_code)]
+/// fn abs_all(input: &mut Cow<[i32]>) {
+///     for i in 0..input.len() {
+///         let v = input[i];
+///         if v < 0 {
+///             // clones into a vector the first time (if not already owned)
+///             input.to_mut()[i] = -v;
+///         }
+///     }
+/// }
+/// ```
+#[stable(feature = "rust1", since = "1.0.0")]
+pub enum Cow<'a, B: ?Sized + 'a>
+    where B: ToOwned
+{
+    /// Borrowed data.
+    #[stable(feature = "rust1", since = "1.0.0")]
+    Borrowed(&'a B),
+
+    /// Owned data.
+    #[stable(feature = "rust1", since = "1.0.0")]
+    Owned(<B as ToOwned>::Owned),
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> Clone for Cow<'a, B> where B: ToOwned {
+    fn clone(&self) -> Cow<'a, B> {
+        match *self {
+            Borrowed(b) => Borrowed(b),
+            Owned(ref o) => {
+                let b: &B = o.borrow();
+                Owned(b.to_owned())
+            }
+        }
+    }
+}
+
+impl<'a, B: ?Sized> Cow<'a, B> where B: ToOwned {
+    /// Acquires a mutable reference to the owned form of the data.
+    ///
+    /// Clones the data if it is not already owned.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::borrow::Borrow;
+    /// use std::borrow::Cow;
     ///
-    /// fn check<T: Borrow<str>>(s: T) {
-    ///     assert_eq!("Hello", s.borrow());
-    /// }
+    /// let mut cow: Cow<[_]> = Cow::Owned(vec![1, 2, 3]);
     ///
-    /// let s = "Hello".to_string();
+    /// let hello = cow.to_mut();
     ///
-    /// check(s);
-    ///
-    /// let s = "Hello";
-    ///
-    /// check(s);
+    /// assert_eq!(hello, &[1, 2, 3]);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
-    fn borrow(&self) -> &Borrowed;
-}
+    pub fn to_mut(&mut self) -> &mut <B as ToOwned>::Owned {
+        match *self {
+            Borrowed(borrowed) => {
+                *self = Owned(borrowed.to_owned());
+                self.to_mut()
+            }
+            Owned(ref mut owned) => owned,
+        }
+    }
 
-/// A trait for mutably borrowing data.
-///
-/// Similar to `Borrow`, but for mutable borrows.
-#[stable(feature = "rust1", since = "1.0.0")]
-pub trait BorrowMut<Borrowed: ?Sized> : Borrow<Borrowed> {
-    /// Mutably borrows from an owned value.
+    /// Extracts the owned data.
+    ///
+    /// Clones the data if it is not already owned.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::borrow::BorrowMut;
+    /// use std::borrow::Cow;
     ///
-    /// fn check<T: BorrowMut<[i32]>>(mut v: T) {
-    ///     assert_eq!(&mut [1, 2, 3], v.borrow_mut());
-    /// }
+    /// let cow: Cow<[_]> = Cow::Owned(vec![1, 2, 3]);
     ///
-    /// let v = vec![1, 2, 3];
+    /// let hello = cow.into_owned();
     ///
-    /// check(v);
+    /// assert_eq!(vec![1, 2, 3], hello);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
-    fn borrow_mut(&mut self) -> &mut Borrowed;
+    pub fn into_owned(self) -> <B as ToOwned>::Owned {
+        match self {
+            Borrowed(borrowed) => borrowed.to_owned(),
+            Owned(owned) => owned,
+        }
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<T: ?Sized> Borrow<T> for T {
-    fn borrow(&self) -> &T { self }
+impl<'a, B: ?Sized> Deref for Cow<'a, B> where B: ToOwned {
+    type Target = B;
+
+    fn deref(&self) -> &B {
+        match *self {
+            Borrowed(borrowed) => borrowed,
+            Owned(ref owned) => owned.borrow(),
+        }
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<T: ?Sized> BorrowMut<T> for T {
-    fn borrow_mut(&mut self) -> &mut T { self }
+impl<'a, B: ?Sized> Eq for Cow<'a, B> where B: Eq + ToOwned {}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> Ord for Cow<'a, B> where B: Ord + ToOwned {
+    #[inline]
+    fn cmp(&self, other: &Cow<'a, B>) -> Ordering {
+        Ord::cmp(&**self, &**other)
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<'a, T: ?Sized> Borrow<T> for &'a T {
-    fn borrow(&self) -> &T { &**self }
+impl<'a, 'b, B: ?Sized, C: ?Sized> PartialEq<Cow<'b, C>> for Cow<'a, B>
+    where B: PartialEq<C> + ToOwned,
+          C: ToOwned
+{
+    #[inline]
+    fn eq(&self, other: &Cow<'b, C>) -> bool {
+        PartialEq::eq(&**self, &**other)
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<'a, T: ?Sized> Borrow<T> for &'a mut T {
-    fn borrow(&self) -> &T { &**self }
+impl<'a, B: ?Sized> PartialOrd for Cow<'a, B> where B: PartialOrd + ToOwned {
+    #[inline]
+    fn partial_cmp(&self, other: &Cow<'a, B>) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&**self, &**other)
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<'a, T: ?Sized> BorrowMut<T> for &'a mut T {
-    fn borrow_mut(&mut self) -> &mut T { &mut **self }
+impl<'a, B: ?Sized> fmt::Debug for Cow<'a, B>
+    where B: fmt::Debug + ToOwned,
+          <B as ToOwned>::Owned: fmt::Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Borrowed(ref b) => fmt::Debug::fmt(b, f),
+            Owned(ref o) => fmt::Debug::fmt(o, f),
+        }
+    }
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> fmt::Display for Cow<'a, B>
+    where B: fmt::Display + ToOwned,
+          <B as ToOwned>::Owned: fmt::Display
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Borrowed(ref b) => fmt::Display::fmt(b, f),
+            Owned(ref o) => fmt::Display::fmt(o, f),
+        }
+    }
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> Hash for Cow<'a, B> where B: Hash + ToOwned {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&**self, state)
+    }
+}
+
+/// Trait for moving into a `Cow`.
+#[unstable(feature = "into_cow", reason = "may be replaced by `convert::Into`",
+           issue = "27735")]
+pub trait IntoCow<'a, B: ?Sized> where B: ToOwned {
+    /// Moves `self` into `Cow`
+    fn into_cow(self) -> Cow<'a, B>;
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, B: ?Sized> IntoCow<'a, B> for Cow<'a, B> where B: ToOwned {
+    fn into_cow(self) -> Cow<'a, B> {
+        self
+    }
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<'a, T: ?Sized + ToOwned> AsRef<T> for Cow<'a, T> {
+    fn as_ref(&self) -> &T {
+        self
+    }
 }
