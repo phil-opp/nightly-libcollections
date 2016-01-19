@@ -10,7 +10,7 @@
 
 //! Collection types.
 //!
-//! See [std::collections](../std/collections) for a detailed discussion of
+//! See [std::collections](../std/collections/index.html) for a detailed discussion of
 //! collections in Rust.
 
 #![crate_name = "collections"]
@@ -32,7 +32,6 @@
 #![feature(alloc)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
-#![feature(clone_from_slice)]
 #![feature(core_intrinsics)]
 #![feature(decode_utf16)]
 #![feature(drop_in_place)]
@@ -43,8 +42,8 @@
 #![feature(iter_arith)]
 #![feature(iter_arith)]
 #![feature(lang_items)]
+#![feature(nonzero)]
 #![feature(num_bits_bytes)]
-#![feature(oom)]
 #![feature(pattern)]
 #![feature(shared)]
 #![feature(slice_bytes)]
@@ -55,7 +54,7 @@
 #![feature(unboxed_closures)]
 #![feature(unicode)]
 #![feature(unique)]
-#![feature(unsafe_no_drop_flag, filling_drop)]
+#![feature(unsafe_no_drop_flag)]
 #![cfg_attr(test, feature(clone_from_slice, rand, test))]
 
 #![no_std]
