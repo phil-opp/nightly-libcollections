@@ -16,6 +16,9 @@ cd nightly-libcollections
 rm -r src
 cp -r ../rust/src/libcollections src
 
+# remove official Cargo.toml in favor of our own
+rm src/Cargo.toml
+
 # try to build it
 cargo build
 
