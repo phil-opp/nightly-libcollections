@@ -27,6 +27,7 @@
        test(no_crate_inject, attr(allow(unused_variables), deny(warnings))))]
 
 #![cfg_attr(test, allow(deprecated))] // rand
+#![cfg_attr(not(test), feature(slice_binary_search_by_key))] // impl [T]
 #![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(alloc)]
@@ -130,4 +131,11 @@ pub enum Bound<T> {
     Excluded(T),
     /// An infinite endpoint. Indicates that there is no bound in this direction.
     Unbounded,
+}
+
+/// An intermediate trait for specialization of `Extend`.
+#[doc(hidden)]
+trait SpecExtend<I: IntoIterator> {
+    /// Extends `self` with the contents of the given iterator.
+    fn spec_extend(&mut self, iter: I);
 }
