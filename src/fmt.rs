@@ -333,7 +333,7 @@
 //! precision := count | '*'
 //! type := identifier | ''
 //! count := parameter | integer
-//! parameter := integer '$'
+//! parameter := argument '$'
 //! ```
 //!
 //! # Formatting Parameters
@@ -395,8 +395,20 @@
 //! `0`.
 //!
 //! The value for the width can also be provided as a `usize` in the list of
-//! parameters by using the `2$` syntax indicating that the second argument is a
-//! `usize` specifying the width.
+//! parameters by using the dollar syntax indicating that the second argument is
+//! a `usize` specifying the width, for example:
+//!
+//! ```
+//! // All of these print "Hello x    !"
+//! println!("Hello {:5}!", "x");
+//! println!("Hello {:1$}!", "x", 5);
+//! println!("Hello {1:0$}!", 5, "x");
+//! println!("Hello {:width$}!", "x", width = 5);
+//! ```
+//!
+//! Referring to an argument with the dollar syntax does not affect the "next
+//! argument" counter, so it's usually a good idea to refer to arguments by
+//! position, or use named arguments.
 //!
 //! ## Precision
 //!
@@ -415,7 +427,7 @@
 //!
 //!    the integer `N` itself is the precision.
 //!
-//! 2. An integer followed by dollar sign `.N$`:
+//! 2. An integer or name followed by dollar sign `.N$`:
 //!
 //!    use format *argument* `N` (which must be a `usize`) as the precision.
 //!
@@ -445,6 +457,10 @@
 //! // Hello {next arg (x)} is {arg 2 (0.01) with precision
 //! //                          specified in its predecessor (5)}
 //! println!("Hello {} is {2:.*}",   "x", 5, 0.01);
+//!
+//! // Hello {next arg (x)} is {arg "number" (0.01) with precision specified
+//! //                          in arg "prec" (5)}
+//! println!("Hello {} is {number:.prec$}", "x", prec = 5, number = 0.01);
 //! ```
 //!
 //! All print the same thing:
