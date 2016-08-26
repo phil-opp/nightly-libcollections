@@ -68,7 +68,7 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{self, Hash};
 use core::intrinsics::{arith_offset, assume};
-use core::iter::FromIterator;
+use core::iter::{FromIterator, FusedIterator};
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::ops;
@@ -268,7 +268,7 @@ use super::range::RangeArgument;
 /// Vec does not currently guarantee the order in which elements are dropped
 /// (the order has changed in the past, and may change again).
 ///
-#[unsafe_no_drop_flag]
+#[cfg_attr(stage0, unsafe_no_drop_flag)]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub struct Vec<T> {
     buf: RawVec<T>,
@@ -1600,11 +1600,9 @@ impl<T: Ord> Ord for Vec<T> {
 impl<T> Drop for Vec<T> {
     #[unsafe_destructor_blind_to_params]
     fn drop(&mut self) {
-        if self.buf.unsafe_no_drop_flag_needs_drop() {
-            unsafe {
-                // use drop for [T]
-                ptr::drop_in_place(&mut self[..]);
-            }
+        unsafe {
+            // use drop for [T]
+            ptr::drop_in_place(&mut self[..]);
         }
         // RawVec handles deallocation
     }
@@ -1845,6 +1843,9 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<T> ExactSizeIterator for IntoIter<T> {}
 
+#[unstable(feature = "fused", issue = "35602")]
+impl<T> FusedIterator for IntoIter<T> {}
+
 #[stable(feature = "vec_into_iter_clone", since = "1.8.0")]
 impl<T: Clone> Clone for IntoIter<T> {
     fn clone(&self) -> IntoIter<T> {
@@ -1932,3 +1933,6 @@ impl<'a, T> Drop for Drain<'a, T> {
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
+
+#[unstable(feature = "fused", issue = "35602")]
+impl<'a, T> FusedIterator for Drain<'a, T> {}
